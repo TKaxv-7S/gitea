@@ -2,6 +2,7 @@ name: release-tag-version
 
 on:
   push:
+    branches: [ release/v* ]
     tags:
       - 'v1.*'
       - '!v1*-rc*'
