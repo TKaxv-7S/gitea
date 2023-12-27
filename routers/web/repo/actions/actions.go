@@ -8,7 +8,6 @@ import (
 	git_model "code.gitea.io/gitea/models/git"
 	repo_model "code.gitea.io/gitea/models/repo"
 	"code.gitea.io/gitea/modules/log"
-	"code.gitea.io/gitea/modules/util"
 	"fmt"
 	"gopkg.in/yaml.v3"
 	"net/http"
