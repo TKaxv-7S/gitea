@@ -195,9 +195,7 @@ menu:
 ## 跨域 (`cors`)
 
 - `ENABLED`: **false**: 启用 CORS 头部（默认禁用）
-- `SCHEME`: **http**: 允许请求的协议
 - `ALLOW_DOMAIN`: **\***: 允许请求的域名列表
-- `ALLOW_SUBDOMAIN`: **false**: 允许上述列出的头部的子域名发出请求。
 - `METHODS`: **GET,HEAD,POST,PUT,PATCH,DELETE,OPTIONS**: 允许发起的请求方式列表
 - `MAX_AGE`: **10m**: 缓存响应的最大时间
 - `ALLOW_CREDENTIALS`: **false**: 允许带有凭据的请求
@@ -1040,10 +1038,11 @@ Gitea 创建以下非唯一队列：
 
 ## API (`api`)
 
-- `ENABLE_SWAGGER`: **true**: 是否启用swagger路由 (`/api/swagger`, `/api/v1/swagger`, …)。
-- `MAX_RESPONSE_ITEMS`: **50**: 单个页面的最大 Feed.
-- `ENABLE_OPENID_SIGNIN`: **false**: 允许使用OpenID登录，当设置为`true`时可以通过 `/user/login` 页面进行OpenID登录。
-- `DISABLE_REGISTRATION`: **false**: 关闭用户注册。
+- `ENABLE_SWAGGER`: **true**: 启用API文档接口 (`/api/swagger`, `/api/v1/swagger`, …). True or false。
+- `MAX_RESPONSE_ITEMS`: **50**: API分页的最大单页项目数。
+- `DEFAULT_PAGING_NUM`: **30**: API分页的默认分页数。
+- `DEFAULT_GIT_TREES_PER_PAGE`: **1000**: Git trees API的默认单页项目数。
+- `DEFAULT_MAX_BLOB_SIZE`: **10485760** (10MiB): blobs API的默认最大文件大小。
 
 ## OAuth2 (`oauth2`)
 
