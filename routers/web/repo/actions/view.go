@@ -773,6 +773,7 @@ func Run(ctx *context_module.Context) {
 		run.RepoID,
 		run.Ref,
 		run.WorkflowID,
+		run.Event,
 	); err != nil {
 		log.Error("CancelRunningJobs: %v", err)
 	}
