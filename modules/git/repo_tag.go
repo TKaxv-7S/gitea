@@ -141,7 +141,7 @@ func (repo *Repository) GetTagInfos(page, pageSize int) ([]*Tag, int, error) {
 			break
 		}
 
-		tag, err := parseTagRef(repo.objectFormat, ref)
+		tag, err := parseTagRef(ref)
 		if err != nil {
 			return nil, 0, fmt.Errorf("GetTagInfos: parse tag: %w", err)
 		}
@@ -161,7 +161,7 @@ func (repo *Repository) GetTagInfos(page, pageSize int) ([]*Tag, int, error) {
 }
 
 // parseTagRef parses a tag from a 'git for-each-ref'-produced reference.
-func parseTagRef(objectFormat ObjectFormat, ref map[string]string) (tag *Tag, err error) {
+func parseTagRef(ref map[string]string) (tag *Tag, err error) {
 	tag = &Tag{
 		Type: ref["objecttype"],
 		Name: ref["refname:lstrip=2"],
@@ -183,11 +183,7 @@ func parseTagRef(objectFormat ObjectFormat, ref map[string]string) (tag *Tag, er
 		}
 	}
 
-	tag.Tagger, err = newSignatureFromCommitline([]byte(ref["creator"]))
-	if err != nil {
-		return nil, fmt.Errorf("parse tagger: %w", err)
-	}
-
+	tag.Tagger = parseSignatureFromCommitLine(ref["creator"])
 	tag.Message = ref["contents"]
 	// strip PGP signature if present in contents field
 	pgpStart := strings.Index(tag.Message, beginpgp)
