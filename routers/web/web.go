@@ -1346,6 +1346,7 @@ func registerRoutes(m *web.Route) {
 			m.Get("", actions.List)
 			m.Post("/disable", reqRepoAdmin, actions.DisableWorkflowFile)
 			m.Post("/enable", reqRepoAdmin, actions.EnableWorkflowFile)
+			m.Post("/run", reqRepoAdmin, actions.Run)
 
 			m.Group("/runs/{run}", func() {
 				m.Combo("").
