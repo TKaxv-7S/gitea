@@ -51,7 +51,7 @@
 						{{end}}
 					</select>
 				{{else if eq $item.Type "boolean"}}
-					<div class="ui inline toggle checkbox">
+					<div class="ui checkbox">
 						<label title="Input: {{$key}}">{{$item.Description}}</label>
 						<input type="checkbox" name="{{$key}}" {{if eq $item.Default "true"}}checked{{end}}>
 					</div>
@@ -64,7 +64,7 @@
 				{{end}}
 			</div>
 			{{end}}
-			<button class="ui tiny blue button" type="submit">Submit</button>
+			<button class="ui primary tiny button" type="submit">Submit</button>
 		</form>
 	</div>
 </div>
