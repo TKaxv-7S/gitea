@@ -49,7 +49,7 @@ var (
 	// hashCurrentPattern matches string that represents a commit SHA, e.g. d8a994ef243349f321568f9e36d5c3f444b99cae
 	// Although SHA1 hashes are 40 chars long, SHA256 are 64, the regex matches the hash from 7 to 64 chars in length
 	// so that abbreviated hash links can be used as well. This matches git and GitHub usability.
-	hashCurrentPattern = regexp.MustCompile(`(?:\s|^|\(|\[)([0-9a-f]{7,64})(?:\s|$|\)|\]|[.,](\s|$))`)
+	hashCurrentPattern = regexp.MustCompile(`(?:\s|^|\(|\[)([0-9a-f]{7,64})(?:\s|$|\)|\]|[.,:](\s|$))`)
 
 	// shortLinkPattern matches short but difficult to parse [[name|link|arg=test]] syntax
 	shortLinkPattern = regexp.MustCompile(`\[\[(.*?)\]\](\w*)`)
@@ -86,6 +86,10 @@ func IsFullURLBytes(link []byte) bool {
 
 func IsFullURLString(link string) bool {
 	return fullURLPattern.MatchString(link)
+}
+
+func IsNonEmptyRelativePath(link string) bool {
+	return link != "" && !IsFullURLString(link) && link[0] != '/' && link[0] != '?' && link[0] != '#'
 }
 
 // regexp for full links to issues/pulls
@@ -372,7 +376,7 @@ func postProcess(ctx *RenderContext, procs []processor, input io.Reader, output 
 	return nil
 }
 
-func visitNode(ctx *RenderContext, procs []processor, node *html.Node) {
+func visitNode(ctx *RenderContext, procs []processor, node *html.Node) *html.Node {
 	// Add user-content- to IDs and "#" links if they don't already have them
 	for idx, attr := range node.Attr {
 		val := strings.TrimPrefix(attr.Val, "#")
@@ -391,27 +395,20 @@ func visitNode(ctx *RenderContext, procs []processor, node *html.Node) {
 		}
 	}
 
-	// We ignore code and pre.
 	switch node.Type {
 	case html.TextNode:
 		textNode(ctx, procs, node)
 	case html.ElementNode:
-		if node.Data == "img" {
-			for i, attr := range node.Attr {
-				if attr.Key != "src" {
-					continue
-				}
-				if len(attr.Val) > 0 && !IsFullURLString(attr.Val) && !strings.HasPrefix(attr.Val, "data:image/") {
-					attr.Val = util.URLJoin(ctx.Links.ResolveMediaLink(ctx.IsWiki), attr.Val)
-				}
-				attr.Val = camoHandleLink(attr.Val)
-				node.Attr[i] = attr
-			}
+		if node.Data == "code" || node.Data == "pre" {
+			// ignore code and pre nodes
+			return node.NextSibling
+		} else if node.Data == "img" {
+			return visitNodeImg(ctx, node)
+		} else if node.Data == "video" {
+			return visitNodeVideo(ctx, node)
 		} else if node.Data == "a" {
 			// Restrict text in links to emojis
 			procs = emojiProcessors
-		} else if node.Data == "code" || node.Data == "pre" {
-			return
 		} else if node.Data == "i" {
 			for _, attr := range node.Attr {
 				if attr.Key != "class" {
@@ -434,11 +431,11 @@ func visitNode(ctx *RenderContext, procs []processor, node *html.Node) {
 				}
 			}
 		}
-		for n := node.FirstChild; n != nil; n = n.NextSibling {
-			visitNode(ctx, procs, n)
+		for n := node.FirstChild; n != nil; {
+			n = visitNode(ctx, procs, n)
 		}
 	}
-	// ignore everything else
+	return node.NextSibling
 }
 
 // textNode runs the passed node through various processors, in order to handle
@@ -733,10 +730,10 @@ func shortLinkProcessor(ctx *RenderContext, node *html.Node) {
 			if image {
 				link = strings.ReplaceAll(link, " ", "+")
 			} else {
-				link = strings.ReplaceAll(link, " ", "-")
+				link = strings.ReplaceAll(link, " ", "-") // FIXME: it should support dashes in the link, eg: "the-dash-support.-"
 			}
 			if !strings.Contains(link, "/") {
-				link = url.PathEscape(link)
+				link = url.PathEscape(link) // FIXME: it doesn't seem right and it might cause double-escaping
 			}
 		}
 		if image {
@@ -768,28 +765,7 @@ func shortLinkProcessor(ctx *RenderContext, node *html.Node) {
 				childNode.Attr = childNode.Attr[:2]
 			}
 		} else {
-			if !absoluteLink {
-				var base string
-				if ctx.IsWiki {
-					switch ext {
-					case "":
-						// no file extension, create a regular wiki link
-						base = ctx.Links.WikiLink()
-					default:
-						// we have a file extension:
-						// return a regular wiki link if it's a renderable file (extension),
-						// raw link otherwise
-						if Type(link) != "" {
-							base = ctx.Links.WikiLink()
-						} else {
-							base = ctx.Links.WikiRawLink()
-						}
-					}
-				} else {
-					base = ctx.Links.SrcLink()
-				}
-				link = util.URLJoin(base, link)
-			}
+			link, _ = ResolveLink(ctx, link, "")
 			childNode.Type = html.TextNode
 			childNode.Data = name
 		}
@@ -851,7 +827,7 @@ func issueIndexPatternProcessor(ctx *RenderContext, node *html.Node) {
 
 	// FIXME: the use of "mode" is quite dirty and hacky, for example: what is a "document"? how should it be rendered?
 	// The "mode" approach should be refactored to some other more clear&reliable way.
-	crossLinkOnly := (ctx.Metas["mode"] == "document" && !ctx.IsWiki)
+	crossLinkOnly := ctx.Metas["mode"] == "document" && !ctx.IsWiki
 
 	var (
 		found bool
