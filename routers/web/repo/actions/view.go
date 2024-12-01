@@ -5,18 +5,10 @@ package actions
 
 import (
 	"archive/zip"
-	"code.gitea.io/gitea/models/perm"
-	access_model "code.gitea.io/gitea/models/perm/access"
-	"code.gitea.io/gitea/modules/git"
-	"code.gitea.io/gitea/modules/log"
-	api "code.gitea.io/gitea/modules/structs"
-	"code.gitea.io/gitea/services/convert"
 	"compress/gzip"
 	"context"
 	"errors"
 	"fmt"
-	"github.com/nektos/act/pkg/jobparser"
-	"github.com/nektos/act/pkg/model"
 	"io"
 	"net/http"
 	"net/url"
@@ -26,24 +18,42 @@ import (
 
 	actions_model "code.gitea.io/gitea/models/actions"
 	"code.gitea.io/gitea/models/db"
+	"code.gitea.io/gitea/models/perm"
+	access_model "code.gitea.io/gitea/models/perm/access"
 	repo_model "code.gitea.io/gitea/models/repo"
 	"code.gitea.io/gitea/models/unit"
 	"code.gitea.io/gitea/modules/actions"
 	"code.gitea.io/gitea/modules/base"
+	"code.gitea.io/gitea/modules/git"
+	"code.gitea.io/gitea/modules/log"
 	"code.gitea.io/gitea/modules/setting"
 	"code.gitea.io/gitea/modules/storage"
+	api "code.gitea.io/gitea/modules/structs"
 	"code.gitea.io/gitea/modules/timeutil"
 	"code.gitea.io/gitea/modules/util"
 	"code.gitea.io/gitea/modules/web"
 	actions_service "code.gitea.io/gitea/services/actions"
 	context_module "code.gitea.io/gitea/services/context"
+	"code.gitea.io/gitea/services/convert"
 
+	"github.com/nektos/act/pkg/jobparser"
+	"github.com/nektos/act/pkg/model"
 	"xorm.io/builder"
 )
 
+func getRunIndex(ctx *context_module.Context) int64 {
+	// if run param is "latest", get the latest run index
+	if ctx.PathParam("run") == "latest" {
+		if run, _ := actions_model.GetLatestRun(ctx, ctx.Repo.Repository.ID); run != nil {
+			return run.Index
+		}
+	}
+	return ctx.PathParamInt64("run")
+}
+
 func View(ctx *context_module.Context) {
 	ctx.Data["PageIsActions"] = true
-	runIndex := ctx.PathParamInt64("run")
+	runIndex := getRunIndex(ctx)
 	jobIndex := ctx.PathParamInt64("job")
 	ctx.Data["RunIndex"] = runIndex
 	ctx.Data["JobIndex"] = jobIndex
@@ -138,7 +148,7 @@ type ViewStepLogLine struct {
 
 func ViewPost(ctx *context_module.Context) {
 	req := web.GetForm(ctx).(*ViewRequest)
-	runIndex := ctx.PathParamInt64("run")
+	runIndex := getRunIndex(ctx)
 	jobIndex := ctx.PathParamInt64("job")
 
 	current, jobs := getRunJobs(ctx, runIndex, jobIndex)
@@ -230,6 +240,27 @@ func ViewPost(ctx *context_module.Context) {
 
 			step := steps[cursor.Step]
 
+			// if task log is expired, return a consistent log line
+			if task.LogExpired {
+				if cursor.Cursor == 0 {
+					resp.Logs.StepsLog = append(resp.Logs.StepsLog, &ViewStepLog{
+						Step:   cursor.Step,
+						Cursor: 1,
+						Lines: []*ViewStepLogLine{
+							{
+								Index:   1,
+								Message: ctx.Locale.TrString("actions.runs.expire_log_message"),
+								// Timestamp doesn't mean anything when the log is expired.
+								// Set it to the task's updated time since it's probably the time when the log has expired.
+								Timestamp: float64(task.Updated.AsTime().UnixNano()) / float64(time.Second),
+							},
+						},
+						Started: int64(step.Started),
+					})
+				}
+				continue
+			}
+
 			logLines := make([]*ViewStepLogLine, 0) // marshal to '[]' instead fo 'null' in json
 
 			index := step.LogIndex + cursor.Cursor
@@ -245,7 +276,6 @@ func ViewPost(ctx *context_module.Context) {
 			if validCursor {
 				length := step.LogLength - cursor.Cursor
 				offset := task.LogIndexes[index]
-				var err error
 				logRows, err := actions.ReadLogs(ctx, task.LogInStorage, task.LogFilename, offset, length)
 				if err != nil {
 					ctx.Error(http.StatusInternalServerError, err.Error())
@@ -276,7 +306,7 @@ func ViewPost(ctx *context_module.Context) {
 // Rerun will rerun jobs in the given run
 // If jobIndexStr is a blank string, it means rerun all jobs
 func Rerun(ctx *context_module.Context) {
-	runIndex := ctx.PathParamInt64("run")
+	runIndex := getRunIndex(ctx)
 	jobIndexStr := ctx.PathParam("job")
 	var jobIndex int64
 	if jobIndexStr != "" {
@@ -366,7 +396,7 @@ func rerunJob(ctx *context_module.Context, job *actions_model.ActionRunJob, shou
 }
 
 func Logs(ctx *context_module.Context) {
-	runIndex := ctx.PathParamInt64("run")
+	runIndex := getRunIndex(ctx)
 	jobIndex := ctx.PathParamInt64("job")
 
 	job, _ := getRunJobs(ctx, runIndex, jobIndex)
@@ -415,7 +445,7 @@ func Logs(ctx *context_module.Context) {
 }
 
 func Cancel(ctx *context_module.Context) {
-	runIndex := ctx.PathParamInt64("run")
+	runIndex := getRunIndex(ctx)
 
 	_, jobs := getRunJobs(ctx, runIndex, -1)
 	if ctx.Written() {
@@ -456,7 +486,7 @@ func Cancel(ctx *context_module.Context) {
 }
 
 func Approve(ctx *context_module.Context) {
-	runIndex := ctx.PathParamInt64("run")
+	runIndex := getRunIndex(ctx)
 
 	current, jobs := getRunJobs(ctx, runIndex, -1)
 	if ctx.Written() {
@@ -505,7 +535,6 @@ func getRunJobs(ctx *context_module.Context, runIndex, jobIndex int64) (*actions
 		return nil, nil
 	}
 	run.Repo = ctx.Repo.Repository
-
 	jobs, err := actions_model.GetRunJobsByRunID(ctx, run.ID)
 	if err != nil {
 		ctx.Error(http.StatusInternalServerError, err.Error())
@@ -537,7 +566,7 @@ type ArtifactsViewItem struct {
 }
 
 func ArtifactsView(ctx *context_module.Context) {
-	runIndex := ctx.PathParamInt64("run")
+	runIndex := getRunIndex(ctx)
 	run, err := actions_model.GetRunByIndex(ctx, ctx.Repo.Repository.ID, runIndex)
 	if err != nil {
 		if errors.Is(err, util.ErrNotExist) {
@@ -575,7 +604,7 @@ func ArtifactsDeleteView(ctx *context_module.Context) {
 		return
 	}
 
-	runIndex := ctx.PathParamInt64("run")
+	runIndex := getRunIndex(ctx)
 	artifactName := ctx.PathParam("artifact_name")
 
 	run, err := actions_model.GetRunByIndex(ctx, ctx.Repo.Repository.ID, runIndex)
@@ -593,7 +622,7 @@ func ArtifactsDeleteView(ctx *context_module.Context) {
 }
 
 func ArtifactsDownloadView(ctx *context_module.Context) {
-	runIndex := ctx.PathParamInt64("run")
+	runIndex := getRunIndex(ctx)
 	artifactName := ctx.PathParam("artifact_name")
 
 	run, err := actions_model.GetRunByIndex(ctx, ctx.Repo.Repository.ID, runIndex)
@@ -634,7 +663,7 @@ func ArtifactsDownloadView(ctx *context_module.Context) {
 	if len(artifacts) == 1 && artifacts[0].ArtifactName+".zip" == artifacts[0].ArtifactPath && artifacts[0].ContentEncoding == "application/zip" {
 		art := artifacts[0]
 		if setting.Actions.ArtifactStorage.ServeDirect() {
-			u, err := storage.ActionsArtifacts.URL(art.StoragePath, art.ArtifactPath)
+			u, err := storage.ActionsArtifacts.URL(art.StoragePath, art.ArtifactPath, nil)
 			if u != nil && err == nil {
 				ctx.Redirect(u.String())
 				return
@@ -808,7 +837,7 @@ func Run(ctx *context_module.Context) {
 	workflow := &model.Workflow{
 		RawOn: workflows[0].RawOn,
 	}
-	inputs := make(map[string]interface{})
+	inputs := make(map[string]any)
 	if workflowDispatch := workflow.WorkflowDispatchConfig(); workflowDispatch != nil {
 		for name, config := range workflowDispatch.Inputs {
 			value := ctx.Req.PostForm.Get(name)

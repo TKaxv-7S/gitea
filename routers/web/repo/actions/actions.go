@@ -5,30 +5,30 @@ package actions
 
 import (
 	"bytes"
-	git_model "code.gitea.io/gitea/models/git"
-	repo_model "code.gitea.io/gitea/models/repo"
-	"code.gitea.io/gitea/modules/log"
-	"code.gitea.io/gitea/modules/util"
 	"fmt"
-	"gopkg.in/yaml.v3"
 	"net/http"
 	"slices"
 	"strings"
 
 	actions_model "code.gitea.io/gitea/models/actions"
 	"code.gitea.io/gitea/models/db"
+	git_model "code.gitea.io/gitea/models/git"
+	repo_model "code.gitea.io/gitea/models/repo"
 	"code.gitea.io/gitea/models/unit"
 	"code.gitea.io/gitea/modules/actions"
 	"code.gitea.io/gitea/modules/base"
 	"code.gitea.io/gitea/modules/container"
 	"code.gitea.io/gitea/modules/git"
+	"code.gitea.io/gitea/modules/log"
 	"code.gitea.io/gitea/modules/optional"
 	"code.gitea.io/gitea/modules/setting"
-	"code.gitea.io/gitea/routers/web/repo"
+	"code.gitea.io/gitea/modules/util"
+	shared_user "code.gitea.io/gitea/routers/web/shared/user"
 	"code.gitea.io/gitea/services/context"
 	"code.gitea.io/gitea/services/convert"
 
 	"github.com/nektos/act/pkg/model"
+	"gopkg.in/yaml.v3"
 )
 
 const (
@@ -39,11 +39,6 @@ const (
 type Workflow struct {
 	Entry  git.TreeEntry
 	ErrMsg string
-}
-
-type WorkflowDispatchInputNode struct {
-	Key   string
-	Value model.WorkflowDispatchInput
 }
 
 // MustEnableActions check if actions are enabled in settings
@@ -160,7 +155,6 @@ func List(ctx *context.Context) {
 			if workflow.Entry.Name() == workflowID {
 				curWorkflow = wf
 			}
-
 		}
 	}
 	ctx.Data["workflows"] = workflows
@@ -174,15 +168,15 @@ func List(ctx *context.Context) {
 	actionsConfig := ctx.Repo.Repository.MustGetUnit(ctx, unit.TypeActions).ActionsConfig()
 	ctx.Data["ActionsConfig"] = actionsConfig
 
-	if len(workflowID) > 0 && ctx.Repo.IsAdmin() {
-		ctx.Data["AllowDisableOrEnableWorkflow"] = true
+	if len(workflowID) > 0 && ctx.Repo.CanWrite(unit.TypeActions) {
+		ctx.Data["AllowDisableOrEnableWorkflow"] = ctx.Repo.IsAdmin()
 		isWorkflowDisabled := actionsConfig.IsWorkflowDisabled(workflowID)
 		ctx.Data["CurWorkflowDisabled"] = isWorkflowDisabled
 
 		if !isWorkflowDisabled && curWorkflow != nil {
-			workflowDispatchInputs := WorkflowDispatchInputs(curWorkflow.RawOn)
-			if workflowDispatchInputs != nil {
-				ctx.Data["WorkflowDispatchInputs"] = workflowDispatchInputs
+			workflowDispatchConfig := workflowDispatchConfig(curWorkflow)
+			if workflowDispatchConfig != nil {
+				ctx.Data["WorkflowDispatchConfig"] = workflowDispatchConfig
 
 				branchOpts := git_model.FindBranchOptions{
 					RepoID:          ctx.Repo.Repository.ID,
@@ -193,7 +187,7 @@ func List(ctx *context.Context) {
 				}
 				branches, err := git_model.FindBranchNames(ctx, branchOpts)
 				if err != nil {
-					ctx.JSON(http.StatusInternalServerError, err)
+					ctx.ServerError("FindBranchNames", err)
 					return
 				}
 				// always put default branch on the top if it exists
@@ -204,9 +198,11 @@ func List(ctx *context.Context) {
 				ctx.Data["Branches"] = branches
 
 				tags, err := repo_model.GetTagNamesByRepoID(ctx, ctx.Repo.Repository.ID)
-				if err == nil {
-					ctx.Data["Tags"] = tags
+				if err != nil {
+					ctx.ServerError("GetTagNamesByRepoID", err)
+					return
 				}
+				ctx.Data["Tags"] = tags
 			}
 		}
 	}
@@ -256,7 +252,7 @@ func List(ctx *context.Context) {
 		ctx.ServerError("GetActors", err)
 		return
 	}
-	ctx.Data["Actors"] = repo.MakeSelfOnTop(ctx.Doer, actors)
+	ctx.Data["Actors"] = shared_user.MakeSelfOnTop(ctx.Doer, actors)
 
 	ctx.Data["StatusInfoList"] = actions_model.GetStatusInfoList(ctx)
 
@@ -271,41 +267,84 @@ func List(ctx *context.Context) {
 	ctx.HTML(http.StatusOK, tplListActions)
 }
 
-func WorkflowDispatchInputs(on yaml.Node) *[]WorkflowDispatchInputNode {
-	if on.Kind != yaml.MappingNode {
-		return nil
-	}
-	var val map[string]yaml.Node
-	if !decodeNode(on, &val) {
-		return nil
-	}
-	var config map[string]yaml.Node
-	if !decodeNode(val["workflow_dispatch"], &config) {
-		return nil
-	}
-	var inputsNode yaml.Node
-	if !decodeNode(config["inputs"], &inputsNode) {
-		return nil
-	}
-	var inputs []WorkflowDispatchInputNode
-	contentLen := len(inputsNode.Content)
-	for i := 0; i < contentLen; i += 2 {
-		var input model.WorkflowDispatchInput
-		if err := inputsNode.Content[i+1].Decode(&input); err != nil {
-			log.Error("Failed to decode dispatch %v into %T: %v", inputsNode, input, err)
-			return nil
-		}
-		inputs = append(inputs, WorkflowDispatchInputNode{
-			Key:   inputsNode.Content[i].Value,
-			Value: input,
-		})
-	}
-	return &inputs
+type WorkflowDispatchInput struct {
+	Name        string   `yaml:"name"`
+	Description string   `yaml:"description"`
+	Required    bool     `yaml:"required"`
+	Default     string   `yaml:"default"`
+	Type        string   `yaml:"type"`
+	Options     []string `yaml:"options"`
 }
 
-func decodeNode(node yaml.Node, out interface{}) bool {
+type WorkflowDispatch struct {
+	Inputs []WorkflowDispatchInput
+}
+
+func workflowDispatchConfig(w *model.Workflow) *WorkflowDispatch {
+	switch w.RawOn.Kind {
+	case yaml.ScalarNode:
+		var val string
+		if !decodeNode(w.RawOn, &val) {
+			return nil
+		}
+		if val == "workflow_dispatch" {
+			return &WorkflowDispatch{}
+		}
+	case yaml.SequenceNode:
+		var val []string
+		if !decodeNode(w.RawOn, &val) {
+			return nil
+		}
+		for _, v := range val {
+			if v == "workflow_dispatch" {
+				return &WorkflowDispatch{}
+			}
+		}
+	case yaml.MappingNode:
+		var val map[string]yaml.Node
+		if !decodeNode(w.RawOn, &val) {
+			return nil
+		}
+
+		workflowDispatchNode, found := val["workflow_dispatch"]
+		if !found {
+			return nil
+		}
+
+		var workflowDispatch WorkflowDispatch
+		var workflowDispatchVal map[string]yaml.Node
+		if !decodeNode(workflowDispatchNode, &workflowDispatchVal) {
+			return &workflowDispatch
+		}
+
+		inputsNode, found := workflowDispatchVal["inputs"]
+		if !found || inputsNode.Kind != yaml.MappingNode {
+			return &workflowDispatch
+		}
+
+		i := 0
+		for {
+			if i+1 >= len(inputsNode.Content) {
+				break
+			}
+			var input WorkflowDispatchInput
+			if decodeNode(*inputsNode.Content[i+1], &input) {
+				input.Name = inputsNode.Content[i].Value
+				workflowDispatch.Inputs = append(workflowDispatch.Inputs, input)
+			}
+			i += 2
+		}
+		return &workflowDispatch
+
+	default:
+		return nil
+	}
+	return nil
+}
+
+func decodeNode(node yaml.Node, out any) bool {
 	if err := node.Decode(out); err != nil {
-		log.Error("Failed to decode node %v into %T: %v", node, out, err)
+		log.Warn("Failed to decode node %v into %T: %v", node, out, err)
 		return false
 	}
 	return true

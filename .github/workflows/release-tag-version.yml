@@ -13,8 +13,6 @@ concurrency:
 
 jobs:
   docker-rootful:
-    #container:
-    #  image: ghcr.io/catthehacker/ubuntu:act-latest
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -50,8 +48,6 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
   docker-rootless:
-    #container:
-    #  image: ghcr.io/catthehacker/ubuntu:act-latest
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

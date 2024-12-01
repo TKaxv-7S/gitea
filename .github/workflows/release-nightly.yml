@@ -10,8 +10,6 @@ concurrency:
 
 jobs:
   nightly-docker-rootful:
-    #container:
-    #  image: ghcr.io/catthehacker/ubuntu:act-latest
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -49,8 +47,6 @@ jobs:
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/gitea:${{ steps.clean_name.outputs.branch }}
   nightly-docker-rootless:
-    #container:
-    #  image: ghcr.io/catthehacker/ubuntu:act-latest
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
