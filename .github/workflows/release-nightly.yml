@@ -2,7 +2,7 @@ name: release-nightly
 
 on:
   push:
-    branches: [main, release/v*]
+    branches: [main_tk, release/v*]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -102,8 +102,8 @@ jobs:
           platforms: linux/amd64,linux/arm64,linux/riscv64
           push: true
           tags: |-
-            gitea/gitea:${{ steps.clean_name.outputs.branch }}
-            ghcr.io/go-gitea/gitea:${{ steps.clean_name.outputs.branch }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/gitea:${{ steps.clean_name.outputs.branch }}
+            ghcr.io/${{ github.repository_owner }}/gitea:${{ steps.clean_name.outputs.branch }}
   nightly-docker-rootless:
     runs-on: namespace-profile-gitea-release-docker
     permissions:
@@ -150,5 +150,5 @@ jobs:
           push: true
           file: Dockerfile.rootless
           tags: |-
-            gitea/gitea:${{ steps.clean_name.outputs.branch }}-rootless
-            ghcr.io/go-gitea/gitea:${{ steps.clean_name.outputs.branch }}-rootless
+            ${{ secrets.DOCKERHUB_USERNAME }}/gitea:${{ steps.clean_name.outputs.branch }}-rootless
+            ghcr.io/${{ github.repository_owner }}/gitea:${{ steps.clean_name.outputs.branch }}-rootless
