@@ -5,15 +5,17 @@ package sender
 
 import (
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"io"
 	"net"
-	"net/smtp"
 	"os"
 	"strings"
 
 	"code.gitea.io/gitea/modules/log"
 	"code.gitea.io/gitea/modules/setting"
+
+	"github.com/wneessen/go-mail/smtp"
 )
 
 // SMTPSender Sender SMTP mail sender
@@ -98,7 +100,7 @@ func (s *SMTPSender) Send(from string, to []string, msg io.WriterTo) error {
 	canAuth, options := client.Extension("AUTH")
 	if len(opts.User) > 0 {
 		if !canAuth {
-			return fmt.Errorf("SMTP server does not support AUTH, but credentials provided")
+			return errors.New("SMTP server does not support AUTH, but credentials provided")
 		}
 
 		var auth smtp.Auth
@@ -106,7 +108,7 @@ func (s *SMTPSender) Send(from string, to []string, msg io.WriterTo) error {
 		if strings.Contains(options, "CRAM-MD5") {
 			auth = smtp.CRAMMD5Auth(opts.User, opts.Passwd)
 		} else if strings.Contains(options, "PLAIN") {
-			auth = smtp.PlainAuth("", opts.User, opts.Passwd, host)
+			auth = smtp.PlainAuth("", opts.User, opts.Passwd, host, false)
 		} else if strings.Contains(options, "LOGIN") {
 			// Patch for AUTH LOGIN
 			auth = LoginAuth(opts.User, opts.Passwd)
@@ -146,5 +148,10 @@ func (s *SMTPSender) Send(from string, to []string, msg io.WriterTo) error {
 		return fmt.Errorf("SMTP close failed: %w", err)
 	}
 
-	return client.Quit()
+	err = client.Quit()
+	if err != nil {
+		log.Error("Quit client failed: %v", err)
+	}
+
+	return nil
 }

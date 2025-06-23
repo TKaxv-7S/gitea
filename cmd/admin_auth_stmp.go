@@ -38,12 +38,10 @@ var (
 		&cli.BoolFlag{
 			Name:  "force-smtps",
 			Usage: "SMTPS is always used on port 465. Set this to force SMTPS on other ports.",
-			Value: true,
 		},
 		&cli.BoolFlag{
 			Name:  "skip-verify",
 			Usage: "Skip TLS verify.",
-			Value: true,
 		},
 		&cli.StringFlag{
 			Name:  "helo-hostname",
@@ -53,7 +51,6 @@ var (
 		&cli.BoolFlag{
 			Name:  "disable-helo",
 			Usage: "Disable SMTP helo.",
-			Value: true,
 		},
 		&cli.StringFlag{
 			Name:  "allowed-domains",
@@ -63,7 +60,6 @@ var (
 		&cli.BoolFlag{
 			Name:  "skip-local-2fa",
 			Usage: "Skip 2FA to log on.",
-			Value: true,
 		},
 		&cli.BoolFlag{
 			Name:  "active",
@@ -117,9 +113,6 @@ func parseSMTPConfig(c *cli.Context, conf *smtp.Source) error {
 	if c.IsSet("disable-helo") {
 		conf.DisableHelo = c.Bool("disable-helo")
 	}
-	if c.IsSet("skip-local-2fa") {
-		conf.SkipLocalTwoFA = c.Bool("skip-local-2fa")
-	}
 	return nil
 }
 
@@ -156,10 +149,11 @@ func runAddSMTP(c *cli.Context) error {
 	}
 
 	return auth_model.CreateSource(ctx, &auth_model.Source{
-		Type:     auth_model.SMTP,
-		Name:     c.String("name"),
-		IsActive: active,
-		Cfg:      &smtpConfig,
+		Type:            auth_model.SMTP,
+		Name:            c.String("name"),
+		IsActive:        active,
+		Cfg:             &smtpConfig,
+		TwoFactorPolicy: util.Iif(c.Bool("skip-local-2fa"), "skip", ""),
 	})
 }
 
@@ -195,6 +189,6 @@ func runUpdateSMTP(c *cli.Context) error {
 	}
 
 	source.Cfg = smtpConfig
-
+	source.TwoFactorPolicy = util.Iif(c.Bool("skip-local-2fa"), "skip", "")
 	return auth_model.UpdateSource(ctx, source)
 }

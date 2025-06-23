@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 
 	"code.gitea.io/gitea/models/db"
@@ -14,6 +15,7 @@ import (
 	"code.gitea.io/gitea/models/unittest"
 	user_model "code.gitea.io/gitea/models/user"
 	"code.gitea.io/gitea/modules/structs"
+	"code.gitea.io/gitea/modules/test"
 	org_service "code.gitea.io/gitea/services/org"
 	"code.gitea.io/gitea/tests"
 
@@ -43,14 +45,15 @@ func testRepoFork(t *testing.T, session *TestSession, ownerName, repoName, forkO
 	link, exists = htmlDoc.doc.Find(`form.ui.form[action*="/fork"]`).Attr("action")
 	assert.True(t, exists, "The template has changed")
 	_, exists = htmlDoc.doc.Find(fmt.Sprintf(".owner.dropdown .item[data-value=\"%d\"]", forkOwner.ID)).Attr("data-value")
-	assert.True(t, exists, fmt.Sprintf("Fork owner '%s' is not present in select box", forkOwnerName))
+	assert.True(t, exists, "Fork owner '%s' is not present in select box", forkOwnerName)
 	req = NewRequestWithValues(t, "POST", link, map[string]string{
 		"_csrf":              htmlDoc.GetCSRF(),
-		"uid":                fmt.Sprintf("%d", forkOwner.ID),
+		"uid":                strconv.FormatInt(forkOwner.ID, 10),
 		"repo_name":          forkRepoName,
 		"fork_single_branch": forkBranch,
 	})
-	session.MakeRequest(t, req, http.StatusSeeOther)
+	resp = session.MakeRequest(t, req, http.StatusOK)
+	assert.Equal(t, fmt.Sprintf("/%s/%s", forkOwnerName, forkRepoName), test.RedirectURL(resp))
 
 	// Step4: check the existence of the forked repo
 	req = NewRequestf(t, "GET", "/%s/%s", forkOwnerName, forkRepoName)
@@ -88,7 +91,7 @@ func TestForkListLimitedAndPrivateRepos(t *testing.T) {
 
 	// fork to a limited org
 	limitedOrg := unittest.AssertExistsAndLoadBean(t, &user_model.User{ID: 22})
-	assert.EqualValues(t, structs.VisibleTypeLimited, limitedOrg.Visibility)
+	assert.Equal(t, structs.VisibleTypeLimited, limitedOrg.Visibility)
 	ownerTeam1, err := org_model.OrgFromUser(limitedOrg).GetOwnerTeam(db.DefaultContext)
 	assert.NoError(t, err)
 	assert.NoError(t, org_service.AddTeamMember(db.DefaultContext, ownerTeam1, user1))
@@ -98,7 +101,7 @@ func TestForkListLimitedAndPrivateRepos(t *testing.T) {
 	user4Sess := loginUser(t, "user4")
 	user4 := unittest.AssertExistsAndLoadBean(t, &user_model.User{Name: "user4"})
 	privateOrg := unittest.AssertExistsAndLoadBean(t, &user_model.User{ID: 23})
-	assert.EqualValues(t, structs.VisibleTypePrivate, privateOrg.Visibility)
+	assert.Equal(t, structs.VisibleTypePrivate, privateOrg.Visibility)
 	ownerTeam2, err := org_model.OrgFromUser(privateOrg).GetOwnerTeam(db.DefaultContext)
 	assert.NoError(t, err)
 	assert.NoError(t, org_service.AddTeamMember(db.DefaultContext, ownerTeam2, user4))
@@ -109,7 +112,7 @@ func TestForkListLimitedAndPrivateRepos(t *testing.T) {
 		req := NewRequest(t, "GET", "/user2/repo1/forks")
 		resp := MakeRequest(t, req, http.StatusOK)
 		htmlDoc := NewHTMLParser(t, resp.Body)
-		assert.EqualValues(t, 0, htmlDoc.Find(forkItemSelector).Length())
+		assert.Equal(t, 0, htmlDoc.Find(forkItemSelector).Length())
 	})
 
 	t.Run("Logged in", func(t *testing.T) {
@@ -118,11 +121,12 @@ func TestForkListLimitedAndPrivateRepos(t *testing.T) {
 		req := NewRequest(t, "GET", "/user2/repo1/forks")
 		resp := user1Sess.MakeRequest(t, req, http.StatusOK)
 		htmlDoc := NewHTMLParser(t, resp.Body)
-		assert.EqualValues(t, 1, htmlDoc.Find(forkItemSelector).Length())
+		// since user1 is an admin, he can get both of the forked repositories
+		assert.Equal(t, 2, htmlDoc.Find(forkItemSelector).Length())
 
 		assert.NoError(t, org_service.AddTeamMember(db.DefaultContext, ownerTeam2, user1))
 		resp = user1Sess.MakeRequest(t, req, http.StatusOK)
 		htmlDoc = NewHTMLParser(t, resp.Body)
-		assert.EqualValues(t, 2, htmlDoc.Find(forkItemSelector).Length())
+		assert.Equal(t, 2, htmlDoc.Find(forkItemSelector).Length())
 	})
 }

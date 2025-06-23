@@ -7,6 +7,7 @@ type ArrayLikeIterable<T> = ArrayLike<T> & Iterable<T>; // for NodeListOf and Ar
 type ElementArg = Element | string | ArrayLikeIterable<Element> | ReturnType<typeof $>;
 type ElementsCallback<T extends Element> = (el: T) => Promisable<any>;
 type ElementsCallbackWithArgs = (el: Element, ...args: any[]) => Promisable<any>;
+export type DOMEvent<E extends Event, T extends Element = HTMLElement> = E & { target: Partial<T>; };
 
 function elementsCall(el: ElementArg, func: ElementsCallbackWithArgs, ...args: any[]) {
   if (typeof el === 'string' || el instanceof String) {
@@ -24,32 +25,34 @@ function elementsCall(el: ElementArg, func: ElementsCallbackWithArgs, ...args: a
   }
 }
 
+export function toggleClass(el: ElementArg, className: string, force?: boolean) {
+  elementsCall(el, (e: Element) => {
+    if (force === true) {
+      e.classList.add(className);
+    } else if (force === false) {
+      e.classList.remove(className);
+    } else if (force === undefined) {
+      e.classList.toggle(className);
+    } else {
+      throw new Error('invalid force argument');
+    }
+  });
+}
+
 /**
- * @param el Element
+ * @param el ElementArg
  * @param force force=true to show or force=false to hide, undefined to toggle
  */
-function toggleShown(el: Element, force: boolean) {
-  if (force === true) {
-    el.classList.remove('tw-hidden');
-  } else if (force === false) {
-    el.classList.add('tw-hidden');
-  } else if (force === undefined) {
-    el.classList.toggle('tw-hidden');
-  } else {
-    throw new Error('invalid force argument');
-  }
+export function toggleElem(el: ElementArg, force?: boolean) {
+  toggleClass(el, 'tw-hidden', force === undefined ? force : !force);
 }
 
 export function showElem(el: ElementArg) {
-  elementsCall(el, toggleShown, true);
+  toggleElem(el, true);
 }
 
 export function hideElem(el: ElementArg) {
-  elementsCall(el, toggleShown, false);
-}
-
-export function toggleElem(el: ElementArg, force?: boolean) {
-  elementsCall(el, toggleShown, force);
+  toggleElem(el, false);
 }
 
 export function isElemHidden(el: ElementArg) {
@@ -86,8 +89,8 @@ export function queryElemChildren<T extends Element>(parent: Element | ParentNod
 }
 
 // it works like parent.querySelectorAll: all descendants are selected
-// in the future, all "queryElems(document, ...)" should be refactored to use a more specific parent
-export function queryElems<T extends Element>(parent: Element | ParentNode, selector: string, fn?: ElementsCallback<T>): ArrayLikeIterable<T> {
+// in the future, all "queryElems(document, ...)" should be refactored to use a more specific parent if the targets are not for page-level components.
+export function queryElems<T extends HTMLElement>(parent: Element | ParentNode, selector: string, fn?: ElementsCallback<T>): ArrayLikeIterable<T> {
   return applyElemsCallback<T>(parent.querySelectorAll(selector), fn);
 }
 
@@ -165,6 +168,7 @@ export function autosize(textarea: HTMLTextAreaElement, {viewportMarginBottom = 
   function resizeToFit() {
     if (isUserResized) return;
     if (textarea.offsetWidth <= 0 && textarea.offsetHeight <= 0) return;
+    const previousMargin = textarea.style.marginBottom;
 
     try {
       const {top, bottom} = overflowOffset();
@@ -180,6 +184,9 @@ export function autosize(textarea: HTMLTextAreaElement, {viewportMarginBottom = 
       const curHeight = parseFloat(computedStyle.height);
       const maxHeight = curHeight + bottom - adjustedViewportMarginBottom;
 
+      // In Firefox, setting auto height momentarily may cause the page to scroll up
+      // unexpectedly, prevent this by setting a temporary margin.
+      textarea.style.marginBottom = `${textarea.clientHeight}px`;
       textarea.style.height = 'auto';
       let newHeight = textarea.scrollHeight + borderAddOn;
 
@@ -200,6 +207,12 @@ export function autosize(textarea: HTMLTextAreaElement, {viewportMarginBottom = 
       textarea.style.height = `${newHeight}px`;
       lastStyleHeight = textarea.style.height;
     } finally {
+      // restore previous margin
+      if (previousMargin) {
+        textarea.style.marginBottom = previousMargin;
+      } else {
+        textarea.style.removeProperty('margin-bottom');
+      }
       // ensure that the textarea is fully scrolled to the end, when the cursor
       // is at the end during an input event
       if (textarea.selectionStart === textarea.selectionEnd &&
@@ -254,12 +267,12 @@ export function loadElem(el: LoadableElement, src: string) {
 // it can't use other transparent polyfill patches because PaleMoon also doesn't support "addEventListener(capture)"
 const needSubmitEventPolyfill = typeof SubmitEvent === 'undefined';
 
-export function submitEventSubmitter(e) {
+export function submitEventSubmitter(e: any) {
   e = e.originalEvent ?? e; // if the event is wrapped by jQuery, use "originalEvent", otherwise, use the event itself
   return needSubmitEventPolyfill ? (e.target._submitter || null) : e.submitter;
 }
 
-function submitEventPolyfillListener(e) {
+function submitEventPolyfillListener(e: DOMEvent<Event>) {
   const form = e.target.closest('form');
   if (!form) return;
   form._submitter = e.target.closest('button:not([type]), button[type="submit"], input[type="submit"]');
@@ -354,10 +367,14 @@ export function querySingleVisibleElem<T extends HTMLElement>(parent: Element, s
   return candidates.length ? candidates[0] as T : null;
 }
 
-export function addDelegatedEventListener<T extends HTMLElement, E extends Event>(parent: Node, type: string, selector: string, listener: (elem: T, e: E) => void | Promise<any>, options?: boolean | AddEventListenerOptions) {
+export function addDelegatedEventListener<T extends HTMLElement, E extends Event>(parent: Node, type: string, selector: string, listener: (elem: T, e: E) => Promisable<void>, options?: boolean | AddEventListenerOptions) {
   parent.addEventListener(type, (e: Event) => {
     const elem = (e.target as HTMLElement).closest(selector);
-    if (!elem) return;
+    // It strictly checks "parent contains the target elem" to avoid side effects of selector running on outside the parent.
+    // Keep in mind that the elem could have been removed from parent by other event handlers before this event handler is called.
+    // For example: tippy popup item, the tippy popup could be hidden and removed from DOM before this.
+    // It is caller's responsibility make sure the elem is still in parent's DOM when this event handler is called.
+    if (!elem || (parent !== document && !parent.contains(elem))) return;
     listener(elem as T, e as E);
   }, options);
 }

@@ -19,7 +19,7 @@ import (
 	"code.gitea.io/gitea/modules/json"
 	"code.gitea.io/gitea/modules/setting"
 	api "code.gitea.io/gitea/modules/structs"
-	oauth2_provider "code.gitea.io/gitea/services/oauth2_provider"
+	"code.gitea.io/gitea/services/oauth2_provider"
 	"code.gitea.io/gitea/tests"
 
 	"github.com/stretchr/testify/assert"
@@ -77,7 +77,7 @@ func TestAuthorizeShow(t *testing.T) {
 	resp := ctx.MakeRequest(t, req, http.StatusOK)
 
 	htmlDoc := NewHTMLParser(t, resp.Body)
-	htmlDoc.AssertElement(t, "#authorize-app", true)
+	AssertHTMLElement(t, htmlDoc, "#authorize-app", true)
 	htmlDoc.GetCSRF()
 }
 
@@ -89,7 +89,7 @@ func TestAuthorizeRedirectWithExistingGrant(t *testing.T) {
 	u, err := resp.Result().Location()
 	assert.NoError(t, err)
 	assert.Equal(t, "thestate", u.Query().Get("state"))
-	assert.Truef(t, len(u.Query().Get("code")) > 30, "authorization code '%s' should be longer then 30", u.Query().Get("code"))
+	assert.Greaterf(t, len(u.Query().Get("code")), 30, "authorization code '%s' should be longer then 30", u.Query().Get("code"))
 	u.RawQuery = ""
 	assert.Equal(t, "https://example.com/xyzzy", u.String())
 }
@@ -125,8 +125,8 @@ func TestAccessTokenExchange(t *testing.T) {
 	parsed := new(response)
 
 	assert.NoError(t, json.Unmarshal(resp.Body.Bytes(), parsed))
-	assert.True(t, len(parsed.AccessToken) > 10)
-	assert.True(t, len(parsed.RefreshToken) > 10)
+	assert.Greater(t, len(parsed.AccessToken), 10)
+	assert.Greater(t, len(parsed.RefreshToken), 10)
 }
 
 func TestAccessTokenExchangeWithPublicClient(t *testing.T) {
@@ -148,8 +148,8 @@ func TestAccessTokenExchangeWithPublicClient(t *testing.T) {
 	parsed := new(response)
 
 	assert.NoError(t, json.Unmarshal(resp.Body.Bytes(), parsed))
-	assert.True(t, len(parsed.AccessToken) > 10)
-	assert.True(t, len(parsed.RefreshToken) > 10)
+	assert.Greater(t, len(parsed.AccessToken), 10)
+	assert.Greater(t, len(parsed.RefreshToken), 10)
 }
 
 func TestAccessTokenExchangeJSON(t *testing.T) {
@@ -172,8 +172,8 @@ func TestAccessTokenExchangeJSON(t *testing.T) {
 	parsed := new(response)
 
 	assert.NoError(t, json.Unmarshal(resp.Body.Bytes(), parsed))
-	assert.True(t, len(parsed.AccessToken) > 10)
-	assert.True(t, len(parsed.RefreshToken) > 10)
+	assert.Greater(t, len(parsed.AccessToken), 10)
+	assert.Greater(t, len(parsed.RefreshToken), 10)
 }
 
 func TestAccessTokenExchangeWithoutPKCE(t *testing.T) {
@@ -289,8 +289,8 @@ func TestAccessTokenExchangeWithBasicAuth(t *testing.T) {
 	parsed := new(response)
 
 	assert.NoError(t, json.Unmarshal(resp.Body.Bytes(), parsed))
-	assert.True(t, len(parsed.AccessToken) > 10)
-	assert.True(t, len(parsed.RefreshToken) > 10)
+	assert.Greater(t, len(parsed.AccessToken), 10)
+	assert.Greater(t, len(parsed.RefreshToken), 10)
 
 	// use wrong client_secret
 	req = NewRequestWithValues(t, "POST", "/login/oauth/access_token", map[string]string{
@@ -449,8 +449,8 @@ func TestOAuthIntrospection(t *testing.T) {
 	parsed := new(response)
 
 	assert.NoError(t, json.Unmarshal(resp.Body.Bytes(), parsed))
-	assert.True(t, len(parsed.AccessToken) > 10)
-	assert.True(t, len(parsed.RefreshToken) > 10)
+	assert.Greater(t, len(parsed.AccessToken), 10)
+	assert.Greater(t, len(parsed.RefreshToken), 10)
 
 	// successful request with a valid client_id/client_secret and a valid token
 	req = NewRequestWithValues(t, "POST", "/login/oauth/introspect", map[string]string{
@@ -690,10 +690,6 @@ func TestOAuth_GrantScopesReadRepositoryFailOrganization(t *testing.T) {
 		{
 			FullRepoName: "user2/commitsonpr",
 			Private:      false,
-		},
-		{
-			FullRepoName: "user2/test_commit_revert",
-			Private:      true,
 		},
 	}
 	assert.Equal(t, reposExpected, reposCaptured)

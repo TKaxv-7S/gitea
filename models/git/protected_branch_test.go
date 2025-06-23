@@ -4,7 +4,6 @@
 package git
 
 import (
-	"fmt"
 	"testing"
 
 	"code.gitea.io/gitea/models/db"
@@ -75,8 +74,8 @@ func TestBranchRuleMatch(t *testing.T) {
 		} else {
 			infact = " not"
 		}
-		assert.EqualValues(t, kase.ExpectedMatch, pb.Match(kase.BranchName),
-			fmt.Sprintf("%s should%s match %s but it is%s", kase.BranchName, should, kase.Rule, infact),
+		assert.Equal(t, kase.ExpectedMatch, pb.Match(kase.BranchName),
+			"%s should%s match %s but it is%s", kase.BranchName, should, kase.Rule, infact,
 		)
 	}
 }

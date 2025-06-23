@@ -13,9 +13,10 @@ import (
 	"testing"
 
 	"code.gitea.io/gitea/models/unittest"
-	"code.gitea.io/gitea/modules/base"
 	"code.gitea.io/gitea/modules/git"
 	"code.gitea.io/gitea/modules/setting"
+	"code.gitea.io/gitea/modules/tempdir"
+	"code.gitea.io/gitea/modules/test"
 	"code.gitea.io/gitea/modules/testlogger"
 
 	"github.com/stretchr/testify/require"
@@ -76,7 +77,7 @@ func PrepareTestEnv(t *testing.T, skip int, syncModels ...any) (*xorm.Engine, fu
 			t.Errorf("error whilst initializing fixtures from %s: %v", fixturesDir, err)
 			return x, deferFn
 		}
-		if err := unittest.LoadFixtures(x); err != nil {
+		if err := unittest.LoadFixtures(); err != nil {
 			t.Errorf("error whilst loading fixtures from %s: %v", fixturesDir, err)
 			return x, deferFn
 		}
@@ -92,10 +93,7 @@ func PrepareTestEnv(t *testing.T, skip int, syncModels ...any) (*xorm.Engine, fu
 func MainTest(m *testing.M) {
 	testlogger.Init()
 
-	giteaRoot := base.SetupGiteaRoot()
-	if giteaRoot == "" {
-		testlogger.Fatalf("Environment variable $GITEA_ROOT not set\n")
-	}
+	giteaRoot := test.SetupGiteaRoot()
 	giteaBinary := "gitea"
 	if runtime.GOOS == "windows" {
 		giteaBinary += ".exe"
@@ -117,15 +115,16 @@ func MainTest(m *testing.M) {
 		setting.CustomConf = giteaConf
 	}
 
-	tmpDataPath, err := os.MkdirTemp("", "data")
+	tmpDataPath, cleanup, err := tempdir.OsTempDir("gitea-test").MkdirTempRandom("data")
 	if err != nil {
 		testlogger.Fatalf("Unable to create temporary data path %v\n", err)
 	}
+	defer cleanup()
 
 	setting.CustomPath = filepath.Join(setting.AppWorkPath, "custom")
 	setting.AppDataPath = tmpDataPath
 
-	unittest.InitSettings()
+	unittest.InitSettingsForTesting()
 	if err = git.InitFull(context.Background()); err != nil {
 		testlogger.Fatalf("Unable to InitFull: %v\n", err)
 	}
@@ -135,9 +134,6 @@ func MainTest(m *testing.M) {
 	exitStatus := m.Run()
 
 	if err := removeAllWithRetry(setting.RepoRootPath); err != nil {
-		fmt.Fprintf(os.Stderr, "os.RemoveAll: %v\n", err)
-	}
-	if err := removeAllWithRetry(tmpDataPath); err != nil {
 		fmt.Fprintf(os.Stderr, "os.RemoveAll: %v\n", err)
 	}
 	os.Exit(exitStatus)

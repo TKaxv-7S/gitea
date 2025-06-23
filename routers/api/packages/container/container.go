@@ -21,6 +21,7 @@ import (
 	"code.gitea.io/gitea/modules/httplib"
 	"code.gitea.io/gitea/modules/json"
 	"code.gitea.io/gitea/modules/log"
+	"code.gitea.io/gitea/modules/optional"
 	packages_module "code.gitea.io/gitea/modules/packages"
 	container_module "code.gitea.io/gitea/modules/packages/container"
 	"code.gitea.io/gitea/modules/setting"
@@ -50,7 +51,7 @@ type containerHeaders struct {
 	Range         string
 	Location      string
 	ContentType   string
-	ContentLength int64
+	ContentLength optional.Option[int64]
 }
 
 // https://github.com/opencontainers/distribution-spec/blob/main/spec.md#legacy-docker-support-http-headers
@@ -64,8 +65,8 @@ func setResponseHeaders(resp http.ResponseWriter, h *containerHeaders) {
 	if h.ContentType != "" {
 		resp.Header().Set("Content-Type", h.ContentType)
 	}
-	if h.ContentLength != 0 {
-		resp.Header().Set("Content-Length", strconv.FormatInt(h.ContentLength, 10))
+	if h.ContentLength.Has() {
+		resp.Header().Set("Content-Length", strconv.FormatInt(h.ContentLength.Value(), 10))
 	}
 	if h.UploadUUID != "" {
 		resp.Header().Set("Docker-Upload-Uuid", h.UploadUUID)
@@ -126,7 +127,7 @@ func apiUnauthorizedError(ctx *context.Context) {
 
 // ReqContainerAccess is a middleware which checks the current user valid (real user or ghost if anonymous access is enabled)
 func ReqContainerAccess(ctx *context.Context) {
-	if ctx.Doer == nil || (setting.Service.RequireSignInView && ctx.Doer.IsGhost()) {
+	if ctx.Doer == nil || (setting.Service.RequireSignInViewStrict && ctx.Doer.IsGhost()) {
 		apiUnauthorizedError(ctx)
 	}
 }
@@ -152,7 +153,7 @@ func Authenticate(ctx *context.Context) {
 	u := ctx.Doer
 	packageScope := auth_service.GetAccessScope(ctx.Data)
 	if u == nil {
-		if setting.Service.RequireSignInView {
+		if setting.Service.RequireSignInViewStrict {
 			apiUnauthorizedError(ctx)
 			return
 		}
@@ -312,19 +313,19 @@ func InitiateUploadBlob(ctx *context.Context) {
 
 	setResponseHeaders(ctx.Resp, &containerHeaders{
 		Location:   fmt.Sprintf("/v2/%s/%s/blobs/uploads/%s", ctx.Package.Owner.LowerName, image, upload.ID),
-		Range:      "0-0",
 		UploadUUID: upload.ID,
 		Status:     http.StatusAccepted,
 	})
 }
 
-// https://docs.docker.com/registry/spec/api/#get-blob-upload
+// https://github.com/opencontainers/distribution-spec/blob/main/spec.md#pushing-a-blob-in-chunks
 func GetUploadBlob(ctx *context.Context) {
+	image := ctx.PathParam("image")
 	uuid := ctx.PathParam("uuid")
 
 	upload, err := packages_model.GetBlobUploadByID(ctx, uuid)
 	if err != nil {
-		if err == packages_model.ErrPackageBlobUploadNotExist {
+		if errors.Is(err, packages_model.ErrPackageBlobUploadNotExist) {
 			apiErrorDefined(ctx, errBlobUploadUnknown)
 		} else {
 			apiError(ctx, http.StatusInternalServerError, err)
@@ -332,20 +333,26 @@ func GetUploadBlob(ctx *context.Context) {
 		return
 	}
 
-	setResponseHeaders(ctx.Resp, &containerHeaders{
-		Range:      fmt.Sprintf("0-%d", upload.BytesReceived),
+	// FIXME: undefined behavior when the uploaded content is empty: https://github.com/opencontainers/distribution-spec/issues/578
+	respHeaders := &containerHeaders{
+		Location:   fmt.Sprintf("/v2/%s/%s/blobs/uploads/%s", ctx.Package.Owner.LowerName, image, upload.ID),
 		UploadUUID: upload.ID,
 		Status:     http.StatusNoContent,
-	})
+	}
+	if upload.BytesReceived > 0 {
+		respHeaders.Range = fmt.Sprintf("0-%d", upload.BytesReceived-1)
+	}
+	setResponseHeaders(ctx.Resp, respHeaders)
 }
 
+// https://github.com/opencontainers/distribution-spec/blob/main/spec.md#single-post
 // https://github.com/opencontainers/distribution-spec/blob/main/spec.md#pushing-a-blob-in-chunks
 func UploadBlob(ctx *context.Context) {
 	image := ctx.PathParam("image")
 
 	uploader, err := container_service.NewBlobUploader(ctx, ctx.PathParam("uuid"))
 	if err != nil {
-		if err == packages_model.ErrPackageBlobUploadNotExist {
+		if errors.Is(err, packages_model.ErrPackageBlobUploadNotExist) {
 			apiErrorDefined(ctx, errBlobUploadUnknown)
 		} else {
 			apiError(ctx, http.StatusInternalServerError, err)
@@ -376,12 +383,15 @@ func UploadBlob(ctx *context.Context) {
 		return
 	}
 
-	setResponseHeaders(ctx.Resp, &containerHeaders{
+	respHeaders := &containerHeaders{
 		Location:   fmt.Sprintf("/v2/%s/%s/blobs/uploads/%s", ctx.Package.Owner.LowerName, image, uploader.ID),
-		Range:      fmt.Sprintf("0-%d", uploader.Size()-1),
 		UploadUUID: uploader.ID,
 		Status:     http.StatusAccepted,
-	})
+	}
+	if uploader.Size() > 0 {
+		respHeaders.Range = fmt.Sprintf("0-%d", uploader.Size()-1)
+	}
+	setResponseHeaders(ctx.Resp, respHeaders)
 }
 
 // https://github.com/opencontainers/distribution-spec/blob/main/spec.md#pushing-a-blob-in-chunks
@@ -396,19 +406,14 @@ func EndUploadBlob(ctx *context.Context) {
 
 	uploader, err := container_service.NewBlobUploader(ctx, ctx.PathParam("uuid"))
 	if err != nil {
-		if err == packages_model.ErrPackageBlobUploadNotExist {
+		if errors.Is(err, packages_model.ErrPackageBlobUploadNotExist) {
 			apiErrorDefined(ctx, errBlobUploadUnknown)
 		} else {
 			apiError(ctx, http.StatusInternalServerError, err)
 		}
 		return
 	}
-	doClose := true
-	defer func() {
-		if doClose {
-			uploader.Close()
-		}
-	}()
+	defer uploader.Close()
 
 	if ctx.Req.Body != nil {
 		if err := uploader.Append(ctx, ctx.Req.Body); err != nil {
@@ -441,11 +446,10 @@ func EndUploadBlob(ctx *context.Context) {
 		return
 	}
 
-	if err := uploader.Close(); err != nil {
-		apiError(ctx, http.StatusInternalServerError, err)
-		return
-	}
-	doClose = false
+	// There was a strange bug: the "Close" fails with error "close .../tmp/package-upload/....: file already closed"
+	// AFAIK there should be no other "Close" call to the uploader between NewBlobUploader and this line.
+	// At least it's safe to call Close twice, so ignore the error.
+	_ = uploader.Close()
 
 	if err := container_service.RemoveBlobUploadByID(ctx, uploader.ID); err != nil {
 		apiError(ctx, http.StatusInternalServerError, err)
@@ -465,7 +469,7 @@ func CancelUploadBlob(ctx *context.Context) {
 
 	_, err := packages_model.GetBlobUploadByID(ctx, uuid)
 	if err != nil {
-		if err == packages_model.ErrPackageBlobUploadNotExist {
+		if errors.Is(err, packages_model.ErrPackageBlobUploadNotExist) {
 			apiErrorDefined(ctx, errBlobUploadUnknown)
 		} else {
 			apiError(ctx, http.StatusInternalServerError, err)
@@ -501,7 +505,7 @@ func getBlobFromContext(ctx *context.Context) (*packages_model.PackageFileDescri
 func HeadBlob(ctx *context.Context) {
 	blob, err := getBlobFromContext(ctx)
 	if err != nil {
-		if err == container_model.ErrContainerBlobNotExist {
+		if errors.Is(err, container_model.ErrContainerBlobNotExist) {
 			apiErrorDefined(ctx, errBlobUnknown)
 		} else {
 			apiError(ctx, http.StatusInternalServerError, err)
@@ -511,7 +515,7 @@ func HeadBlob(ctx *context.Context) {
 
 	setResponseHeaders(ctx.Resp, &containerHeaders{
 		ContentDigest: blob.Properties.GetByName(container_module.PropertyDigest),
-		ContentLength: blob.Blob.Size,
+		ContentLength: optional.Some(blob.Blob.Size),
 		Status:        http.StatusOK,
 	})
 }
@@ -520,7 +524,7 @@ func HeadBlob(ctx *context.Context) {
 func GetBlob(ctx *context.Context) {
 	blob, err := getBlobFromContext(ctx)
 	if err != nil {
-		if err == container_model.ErrContainerBlobNotExist {
+		if errors.Is(err, container_model.ErrContainerBlobNotExist) {
 			apiErrorDefined(ctx, errBlobUnknown)
 		} else {
 			apiError(ctx, http.StatusInternalServerError, err)
@@ -639,7 +643,7 @@ func getManifestFromContext(ctx *context.Context) (*packages_model.PackageFileDe
 func HeadManifest(ctx *context.Context) {
 	manifest, err := getManifestFromContext(ctx)
 	if err != nil {
-		if err == container_model.ErrContainerBlobNotExist {
+		if errors.Is(err, container_model.ErrContainerBlobNotExist) {
 			apiErrorDefined(ctx, errManifestUnknown)
 		} else {
 			apiError(ctx, http.StatusInternalServerError, err)
@@ -650,7 +654,7 @@ func HeadManifest(ctx *context.Context) {
 	setResponseHeaders(ctx.Resp, &containerHeaders{
 		ContentDigest: manifest.Properties.GetByName(container_module.PropertyDigest),
 		ContentType:   manifest.Properties.GetByName(container_module.PropertyMediaType),
-		ContentLength: manifest.Blob.Size,
+		ContentLength: optional.Some(manifest.Blob.Size),
 		Status:        http.StatusOK,
 	})
 }
@@ -659,7 +663,7 @@ func HeadManifest(ctx *context.Context) {
 func GetManifest(ctx *context.Context) {
 	manifest, err := getManifestFromContext(ctx)
 	if err != nil {
-		if err == container_model.ErrContainerBlobNotExist {
+		if errors.Is(err, container_model.ErrContainerBlobNotExist) {
 			apiErrorDefined(ctx, errManifestUnknown)
 		} else {
 			apiError(ctx, http.StatusInternalServerError, err)
@@ -714,14 +718,14 @@ func serveBlob(ctx *context.Context, pfd *packages_model.PackageFileDescriptor) 
 	headers := &containerHeaders{
 		ContentDigest: pfd.Properties.GetByName(container_module.PropertyDigest),
 		ContentType:   pfd.Properties.GetByName(container_module.PropertyMediaType),
-		ContentLength: pfd.Blob.Size,
+		ContentLength: optional.Some(pfd.Blob.Size),
 		Status:        http.StatusOK,
 	}
 
 	if u != nil {
 		headers.Status = http.StatusTemporaryRedirect
 		headers.Location = u.String()
-
+		headers.ContentLength = optional.None[int64]() // do not set Content-Length for redirect responses
 		setResponseHeaders(ctx.Resp, headers)
 		return
 	}
@@ -739,7 +743,7 @@ func GetTagList(ctx *context.Context) {
 	image := ctx.PathParam("image")
 
 	if _, err := packages_model.GetPackageByName(ctx, ctx.Package.Owner.ID, packages_model.TypeContainer, image); err != nil {
-		if err == packages_model.ErrPackageNotExist {
+		if errors.Is(err, packages_model.ErrPackageNotExist) {
 			apiErrorDefined(ctx, errNameUnknown)
 		} else {
 			apiError(ctx, http.StatusInternalServerError, err)

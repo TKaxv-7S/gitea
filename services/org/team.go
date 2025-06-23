@@ -141,11 +141,14 @@ func UpdateTeam(ctx context.Context, t *organization.Team, authChanged, includeA
 
 	// Update access for team members if needed.
 	if authChanged {
-		if err = t.LoadRepositories(ctx); err != nil {
-			return fmt.Errorf("LoadRepositories: %w", err)
+		repos, err := repo_model.GetTeamRepositories(ctx, &repo_model.SearchTeamRepoOptions{
+			TeamID: t.ID,
+		})
+		if err != nil {
+			return fmt.Errorf("GetTeamRepositories: %w", err)
 		}
 
-		for _, repo := range t.Repos {
+		for _, repo := range repos {
 			if err = access_model.RecalculateTeamAccesses(ctx, repo, 0); err != nil {
 				return fmt.Errorf("recalculateTeamAccesses: %w", err)
 			}
@@ -171,10 +174,6 @@ func DeleteTeam(ctx context.Context, t *organization.Team) error {
 		return err
 	}
 	defer committer.Close()
-
-	if err := t.LoadRepositories(ctx); err != nil {
-		return err
-	}
 
 	if err := t.LoadMembers(ctx); err != nil {
 		return err
@@ -260,37 +259,6 @@ func AddTeamMember(ctx context.Context, team *organization.Team, user *user_mode
 		}
 
 		team.NumMembers++
-
-		// Give access to team repositories.
-		// update exist access if mode become bigger
-		subQuery := builder.Select("repo_id").From("team_repo").
-			Where(builder.Eq{"team_id": team.ID})
-
-		if _, err := sess.Where("user_id=?", user.ID).
-			In("repo_id", subQuery).
-			And("mode < ?", team.AccessMode).
-			SetExpr("mode", team.AccessMode).
-			Update(new(access_model.Access)); err != nil {
-			return fmt.Errorf("update user accesses: %w", err)
-		}
-
-		// for not exist access
-		var repoIDs []int64
-		accessSubQuery := builder.Select("repo_id").From("access").Where(builder.Eq{"user_id": user.ID})
-		if err := sess.SQL(subQuery.And(builder.NotIn("repo_id", accessSubQuery))).Find(&repoIDs); err != nil {
-			return fmt.Errorf("select id accesses: %w", err)
-		}
-
-		accesses := make([]*access_model.Access, 0, 100)
-		for i, repoID := range repoIDs {
-			accesses = append(accesses, &access_model.Access{RepoID: repoID, UserID: user.ID, Mode: team.AccessMode})
-			if (i%100 == 0 || i == len(repoIDs)-1) && len(accesses) > 0 {
-				if err = db.Insert(ctx, accesses); err != nil {
-					return fmt.Errorf("insert new user accesses: %w", err)
-				}
-				accesses = accesses[:0]
-			}
-		}
 		return nil
 	})
 	if err != nil {
@@ -301,8 +269,11 @@ func AddTeamMember(ctx context.Context, team *organization.Team, user *user_mode
 	// FIXME: Update watch repos batchly
 	if setting.Service.AutoWatchNewRepos {
 		// Get team and its repositories.
-		if err := team.LoadRepositories(ctx); err != nil {
-			log.Error("team.LoadRepositories failed: %v", err)
+		repos, err := repo_model.GetTeamRepositories(ctx, &repo_model.SearchTeamRepoOptions{
+			TeamID: team.ID,
+		})
+		if err != nil {
+			log.Error("GetTeamRepositories failed: %v", err)
 		}
 
 		// FIXME: in the goroutine, it can't access the "ctx", it could only use db.DefaultContext at the moment
@@ -312,7 +283,7 @@ func AddTeamMember(ctx context.Context, team *organization.Team, user *user_mode
 					log.Error("watch repo failed: %v", err)
 				}
 			}
-		}(team.Repos)
+		}(repos)
 	}
 
 	return nil
@@ -332,7 +303,10 @@ func removeTeamMember(ctx context.Context, team *organization.Team, user *user_m
 
 	team.NumMembers--
 
-	if err := team.LoadRepositories(ctx); err != nil {
+	repos, err := repo_model.GetTeamRepositories(ctx, &repo_model.SearchTeamRepoOptions{
+		TeamID: team.ID,
+	})
+	if err != nil {
 		return err
 	}
 
@@ -350,7 +324,7 @@ func removeTeamMember(ctx context.Context, team *organization.Team, user *user_m
 	}
 
 	// Delete access to team repositories.
-	for _, repo := range team.Repos {
+	for _, repo := range repos {
 		if err := access_model.RecalculateUserAccess(ctx, repo, user.ID); err != nil {
 			return err
 		}

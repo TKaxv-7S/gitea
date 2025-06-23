@@ -88,7 +88,7 @@ func TestUpdateTeam(t *testing.T) {
 	assert.True(t, strings.HasPrefix(team.Description, "A long description!"))
 
 	access := unittest.AssertExistsAndLoadBean(t, &access_model.Access{UserID: 4, RepoID: 3})
-	assert.EqualValues(t, perm.AccessModeAdmin, access.Mode)
+	assert.Equal(t, perm.AccessModeAdmin, access.Mode)
 
 	unittest.CheckConsistencyFor(t, &organization.Team{ID: team.ID})
 }
@@ -121,7 +121,7 @@ func TestDeleteTeam(t *testing.T) {
 	repo := unittest.AssertExistsAndLoadBean(t, &repo_model.Repository{ID: 3})
 	accessMode, err := access_model.AccessLevel(db.DefaultContext, user, repo)
 	assert.NoError(t, err)
-	assert.True(t, accessMode < perm.AccessModeWrite)
+	assert.Less(t, accessMode, perm.AccessModeWrite)
 }
 
 func TestAddTeamMember(t *testing.T) {
@@ -166,32 +166,17 @@ func TestRemoveTeamMember(t *testing.T) {
 	assert.True(t, organization.IsErrLastOrgOwner(err))
 }
 
-func TestRepository_RecalculateAccesses3(t *testing.T) {
-	assert.NoError(t, unittest.PrepareTestDatabase())
-	team5 := unittest.AssertExistsAndLoadBean(t, &organization.Team{ID: 5})
-	user29 := unittest.AssertExistsAndLoadBean(t, &user_model.User{ID: 29})
-
-	has, err := db.GetEngine(db.DefaultContext).Get(&access_model.Access{UserID: user29.ID, RepoID: 23})
-	assert.NoError(t, err)
-	assert.False(t, has)
-
-	// adding user29 to team5 should add an explicit access row for repo 23
-	// even though repo 23 is public
-	assert.NoError(t, AddTeamMember(db.DefaultContext, team5, user29))
-
-	has, err = db.GetEngine(db.DefaultContext).Get(&access_model.Access{UserID: user29.ID, RepoID: 23})
-	assert.NoError(t, err)
-	assert.True(t, has)
-}
-
 func TestIncludesAllRepositoriesTeams(t *testing.T) {
 	assert.NoError(t, unittest.PrepareTestDatabase())
 
 	testTeamRepositories := func(teamID int64, repoIDs []int64) {
 		team := unittest.AssertExistsAndLoadBean(t, &organization.Team{ID: teamID})
-		assert.NoError(t, team.LoadRepositories(db.DefaultContext), "%s: GetRepositories", team.Name)
-		assert.Len(t, team.Repos, team.NumRepos, "%s: len repo", team.Name)
-		assert.Len(t, team.Repos, len(repoIDs), "%s: repo count", team.Name)
+		repos, err := repo_model.GetTeamRepositories(db.DefaultContext, &repo_model.SearchTeamRepoOptions{
+			TeamID: team.ID,
+		})
+		assert.NoError(t, err, "%s: GetTeamRepositories", team.Name)
+		assert.Len(t, repos, team.NumRepos, "%s: len repo", team.Name)
+		assert.Len(t, repos, len(repoIDs), "%s: repo count", team.Name)
 		for i, rid := range repoIDs {
 			if rid > 0 {
 				assert.True(t, repo_service.HasRepository(db.DefaultContext, team, rid), "%s: HasRepository(%d) %d", rid, i)
@@ -220,7 +205,8 @@ func TestIncludesAllRepositoriesTeams(t *testing.T) {
 	// Create repos.
 	repoIDs := make([]int64, 0)
 	for i := 0; i < 3; i++ {
-		r, err := repo_service.CreateRepositoryDirectly(db.DefaultContext, user, org.AsUser(), repo_service.CreateRepoOptions{Name: fmt.Sprintf("repo-%d", i)})
+		r, err := repo_service.CreateRepositoryDirectly(db.DefaultContext, user, org.AsUser(),
+			repo_service.CreateRepoOptions{Name: fmt.Sprintf("repo-%d", i)}, true)
 		assert.NoError(t, err, "CreateRepository %d", i)
 		if r != nil {
 			repoIDs = append(repoIDs, r.ID)
@@ -282,7 +268,7 @@ func TestIncludesAllRepositoriesTeams(t *testing.T) {
 	}
 
 	// Create repo and check teams repositories.
-	r, err := repo_service.CreateRepositoryDirectly(db.DefaultContext, user, org.AsUser(), repo_service.CreateRepoOptions{Name: "repo-last"})
+	r, err := repo_service.CreateRepositoryDirectly(db.DefaultContext, user, org.AsUser(), repo_service.CreateRepoOptions{Name: "repo-last"}, true)
 	assert.NoError(t, err, "CreateRepository last")
 	if r != nil {
 		repoIDs = append(repoIDs, r.ID)
@@ -310,5 +296,5 @@ func TestIncludesAllRepositoriesTeams(t *testing.T) {
 			assert.NoError(t, repo_service.DeleteRepositoryDirectly(db.DefaultContext, user, rid), "DeleteRepository %d", i)
 		}
 	}
-	assert.NoError(t, organization.DeleteOrganization(db.DefaultContext, org), "DeleteOrganization")
+	assert.NoError(t, DeleteOrganization(db.DefaultContext, org, false), "DeleteOrganization")
 }
