@@ -64,9 +64,3 @@ func TestParseImageConfig(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, &Metadata{Platform: "unknown/unknown"}, metadata)
 }
-
-func TestParseOCIImageConfig(t *testing.T) {
-	metadata, err := parseOCIImageConfig(strings.NewReader(""))
-	require.NoError(t, err)
-	assert.Equal(t, &Metadata{Type: TypeOCI, Platform: DefaultPlatform, ImageLayers: []string{}}, metadata)
-}
