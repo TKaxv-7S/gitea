@@ -4,7 +4,60 @@ This changelog goes through the changes that have been made in each release
 without substantial changes to our git log; to see the highlights of what has
 been added to each release, please refer to the [blog](https://blog.gitea.com).
 
-## [1.24.2](https://github.com/go-gitea/gitea/releases/tag/1.24.2) - 2025-06-20
+## [1.24.5](https://github.com/go-gitea/gitea/releases/tag/v1.24.5) - 2025-08-12
+
+* BUGFIXES
+  * Fix a bug where lfs gc never worked. (#35198) (#35255)
+  * Reload issue when sending webhook to make num comments is right. (#35243) (#35248)
+  * Fix bug when review pull request commits (#35192) (#35246)
+* MISC
+  * Vertically center "Show Resolved" (#35211) (#35218)
+
+## [1.24.4](https://github.com/go-gitea/gitea/releases/tag/v1.24.4) - 2025-08-03
+
+* BUGFIXES
+  * Fix various bugs (1.24) (#35186)
+  * Fix migrate input box bug (#35166) (#35171)
+  * Only hide dropzone when no files have been uploaded (#35156) (#35167)
+  * Fix review comment/dimiss comment x reference can be refereced back (#35094) (#35099)
+  * Fix submodule nil check (#35096) (#35098)
+* MISC
+  * Don't use full-file highlight when there is a git diff textconv (#35114) (#35119)
+  * Increase gap on latest commit (#35104) (#35113)
+
+## [1.24.3](https://github.com/go-gitea/gitea/releases/tag/v1.24.3) - 2025-07-15
+
+* BUGFIXES
+  * Fix form property assignment edge case (#35073) (#35078)
+  * Improve submodule relative path handling (#35056) (#35075)
+  * Fix incorrect comment diff hunk parsing, fix github asset ID nil panic (#35046) (#35055)
+  * Fix updating user visibility (#35036) (#35044)
+  * Support base64-encoded agit push options (#35037) (#35041)
+  * Make submodule link work with relative path (#35034) (#35038)
+  * Fix bug when displaying git user avatar in commits list (#35006)
+  * Fix API response for swagger spec (#35029)
+  * Start automerge check again after the conflict check and the schedule (#34988) (#35002)
+  * Fix the response format for actions/workflows (#35009) (#35016)
+  * Fix repo settings and protocol log problems (#35012) (#35013)
+  * Fix project images scroll (#34971) (#34972)
+  * Mark old reviews as stale on agit pr updates (#34933) (#34965)
+  * Fix git graph page (#34948) (#34949)
+  * Don't send trigger for a pending review's comment create/update/delete (#34928) (#34939)
+  * Fix some log and UI problems (#34863) (#34868)
+  * Fix archive API (#34853) (#34857)
+  * Ignore force pushes for changed files in a PR review (#34837) (#34843)
+  * Fix SSH LFS timeout (#34838) (#34842)
+  * Fix team permissions (#34827) (#34836)
+  * Fix job status aggregation logic (#34823) (#34835)
+  * Fix issue filter (#34914) (#34915)
+  * Fix typo in pull request merge warning message text (#34899) (#34903)
+  * Support the open-icon of folder (#34168) (#34896)
+  * Optimize flex layout of release attachment area (#34885) (#34886)
+  * Fix the issue of abnormal interface when there is no issue-item on the project page (#34791) (#34880)
+  * Skip updating timestamp when sync branch (#34875)
+  * Fix required contexts and commit status matching bug (#34815) (#34829)
+
+## [1.24.2](https://github.com/go-gitea/gitea/releases/tag/v1.24.2) - 2025-06-20
 
 * BUGFIXES
   * Fix container range bug (#34795) (#34796)
@@ -12,7 +65,7 @@ been added to each release, please refer to the [blog](https://blog.gitea.com).
 * BUILD
   * Bump poetry feature to new url for dev container (#34787) (#34790)
 
-## [1.24.1](https://github.com/go-gitea/gitea/releases/tag/1.24.1) - 2025-06-18
+## [1.24.1](https://github.com/go-gitea/gitea/releases/tag/v1.24.1) - 2025-06-18
 
 * ENHANCEMENTS
   * Improve alignment of commit status icon on commit page (#34750) (#34757)
@@ -32,7 +85,7 @@ been added to each release, please refer to the [blog](https://blog.gitea.com).
   * Hide href attribute of a tag if there is no target_url (#34556) (#34684)
   * Fix tag target (#34781) #34783
 
-## [1.24.0](https://github.com/go-gitea/gitea/releases/tag/1.24.0) - 2025-05-26
+## [1.24.0](https://github.com/go-gitea/gitea/releases/tag/v1.24.0) - 2025-05-26
 
 * BREAKING
   * Make Gitea always use its internal config, ignore `/etc/gitconfig` (#33076)
@@ -402,7 +455,7 @@ been added to each release, please refer to the [blog](https://blog.gitea.com).
   * Bump x/net (#32896) (#32900)
   * Only activity tab needs heatmap data loading (#34652)
 
-## [1.23.8](https://github.com/go-gitea/gitea/releases/tag/1.23.8) - 2025-05-11
+## [1.23.8](https://github.com/go-gitea/gitea/releases/tag/v1.23.8) - 2025-05-11
 
 * SECURITY
   * Fix a bug when uploading file via lfs ssh command (#34408) (#34411)
@@ -429,7 +482,7 @@ been added to each release, please refer to the [blog](https://blog.gitea.com).
   * Bump go version in go.mod (#34160)
   * remove hardcoded 'code' string in clone_panel.tmpl (#34153) (#34158)
 
-## [1.23.7](https://github.com/go-gitea/gitea/releases/tag/1.23.7) - 2025-04-07
+## [1.23.7](https://github.com/go-gitea/gitea/releases/tag/v1.23.7) - 2025-04-07
 
 * Enhancements
   * Add a config option to block "expensive" pages for anonymous users (#34024) (#34071)
@@ -527,7 +580,7 @@ been added to each release, please refer to the [blog](https://blog.gitea.com).
 * BUGFIXES
   * Fix a bug caused by status webhook template #33512
 
-## [1.23.2](https://github.com/go-gitea/gitea/releases/tag/1.23.2) - 2025-02-04
+## [1.23.2](https://github.com/go-gitea/gitea/releases/tag/v1.23.2) - 2025-02-04
 
 * BREAKING
   * Add tests for webhook and fix some webhook bugs (#33396) (#33442)
@@ -3057,7 +3110,7 @@ Key highlights of this release encompass significant changes categorized under `
   * Improve decryption failure message (#24573) (#24575)
   * Makefile: Use portable !, not GNUish -not, with find(1). (#24565) (#24572)
 
-## [1.19.3](https://github.com/go-gitea/gitea/releases/tag/1.19.3) - 2023-05-03
+## [1.19.3](https://github.com/go-gitea/gitea/releases/tag/v1.19.3) - 2023-05-03
 
 * SECURITY
   * Use golang 1.20.4 to fix CVE-2023-24539, CVE-2023-24540, and CVE-2023-29400
@@ -3070,7 +3123,7 @@ Key highlights of this release encompass significant changes categorized under `
   * Fix incorrect CurrentUser check for docker rootless (#24435)
   * Getting the tag list does not require being signed in (#24413) (#24416)
 
-## [1.19.2](https://github.com/go-gitea/gitea/releases/tag/1.19.2) - 2023-04-26
+## [1.19.2](https://github.com/go-gitea/gitea/releases/tag/v1.19.2) - 2023-04-26
 
 * SECURITY
   * Require repo scope for PATs for private repos and basic authentication (#24362) (#24364)
@@ -3569,7 +3622,7 @@ Key highlights of this release encompass significant changes categorized under `
   * Display attachments of review comment when comment content is blank (#23035) (#23046)
   * Return empty url for submodule tree entries (#23043) (#23048)
 
-## [1.18.4](https://github.com/go-gitea/gitea/releases/tag/1.18.4) - 2023-02-20
+## [1.18.4](https://github.com/go-gitea/gitea/releases/tag/v1.18.4) - 2023-02-20
 
 * SECURITY
   * Provide the ability to set password hash algorithm parameters (#22942) (#22943)
@@ -3996,7 +4049,7 @@ Key highlights of this release encompass significant changes categorized under `
   * Fix the mode of custom dir to 0700 in docker-rootless (#20861) (#20867)
   * Fix UI mis-align for PR commit history (#20845) (#20859)
 
-## [1.17.1](https://github.com/go-gitea/gitea/releases/tag/1.17.1) - 2022-08-17
+## [1.17.1](https://github.com/go-gitea/gitea/releases/tag/v1.17.1) - 2022-08-17
 
 * SECURITY
   * Correctly escape within tribute.js (#20831) (#20832)
