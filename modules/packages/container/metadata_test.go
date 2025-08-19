@@ -59,6 +59,10 @@ func TestParseImageConfig(t *testing.T) {
 	assert.ElementsMatch(t, []string{author}, metadata.Authors)
 	assert.Equal(t, projectURL, metadata.ProjectURL)
 	assert.Equal(t, repositoryURL, metadata.RepositoryURL)
+
+	metadata, err = ParseImageConfig("anything-unknown", strings.NewReader(""))
+	require.NoError(t, err)
+	assert.Equal(t, &Metadata{Platform: "unknown/unknown"}, metadata)
 }
 
 func TestParseOCIImageConfig(t *testing.T) {
