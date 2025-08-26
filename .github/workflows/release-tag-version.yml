@@ -27,6 +27,7 @@ jobs:
           check-latest: true
       - uses: actions/setup-node@v4
         with:
+          registry-url: 'https://registry.npmmirror.com'
           node-version: 22
           cache: npm
           cache-dependency-path: package-lock.json
