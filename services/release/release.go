@@ -262,7 +262,7 @@ func UpdateRelease(ctx context.Context, doer *user_model.User, gitRepo *git.Repo
 	if rel.ID == 0 {
 		return errors.New("UpdateRelease only accepts an exist release")
 	}
-	isTagCreated, err := createTag(gitRepo.Ctx, gitRepo, rel, "")
+	isTagCreated, err := createTag(ctx, gitRepo, rel, "")
 	if err != nil {
 		return err
 	}
@@ -371,8 +371,9 @@ func DeleteReleaseByID(ctx context.Context, repo *repo_model.Repository, rel *re
 			}
 		}
 
-		if stdout, _, err := gitcmd.NewCommand("tag", "-d").AddDashesAndList(rel.TagName).
-			RunStdString(ctx, &gitcmd.RunOpts{Dir: repo.RepoPath()}); err != nil && !strings.Contains(err.Error(), "not found") {
+		if stdout, err := gitrepo.RunCmdString(ctx, repo,
+			gitcmd.NewCommand("tag", "-d").AddDashesAndList(rel.TagName),
+		); err != nil && !strings.Contains(err.Error(), "not found") {
 			log.Error("DeleteReleaseByID (git tag -d): %d in %v Failed:\nStdout: %s\nError: %v", rel.ID, repo, stdout, err)
 			return fmt.Errorf("git tag -d: %w", err)
 		}

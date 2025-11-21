@@ -49,24 +49,20 @@ export default defineConfig([
     },
     linterOptions: {
       reportUnusedDisableDirectives: 2,
+      reportUnusedInlineConfigs: 2,
     },
     plugins: {
       '@eslint-community/eslint-comments': comments,
-      // @ts-expect-error
       '@stylistic': stylistic,
       '@typescript-eslint': typescriptPlugin.plugin,
       'array-func': arrayFunc,
       // @ts-expect-error -- https://github.com/un-ts/eslint-plugin-import-x/issues/203
       'import-x': importPlugin,
       'no-use-extend-native': noUseExtendNative,
-      // @ts-expect-error
       regexp,
-      // @ts-expect-error
       sonarjs,
-      // @ts-expect-error
       unicorn,
       github,
-      // @ts-expect-error
       wc,
     },
     settings: {
@@ -595,6 +591,7 @@ export default defineConfig([
       'no-unused-vars': [0], // handled by @typescript-eslint/no-unused-vars
       'no-use-before-define': [0], // handled by @typescript-eslint/no-use-before-define
       'no-use-extend-native/no-use-extend-native': [2],
+      'no-useless-assignment': [2],
       'no-useless-backreference': [2],
       'no-useless-call': [2],
       'no-useless-catch': [2],
@@ -777,6 +774,7 @@ export default defineConfig([
       'unicorn/no-empty-file': [2],
       'unicorn/no-for-loop': [0],
       'unicorn/no-hex-escape': [0],
+      'unicorn/no-immediate-mutation': [0],
       'unicorn/no-instanceof-array': [0],
       'unicorn/no-invalid-fetch-options': [2],
       'unicorn/no-invalid-remove-event-listener': [2],
@@ -802,6 +800,7 @@ export default defineConfig([
       'unicorn/no-unreadable-array-destructuring': [0],
       'unicorn/no-unreadable-iife': [2],
       'unicorn/no-unused-properties': [2],
+      'unicorn/no-useless-collection-argument': [2],
       'unicorn/no-useless-fallback-in-spread': [2],
       'unicorn/no-useless-length-check': [2],
       'unicorn/no-useless-promise-resolve-reject': [2],
@@ -813,8 +812,8 @@ export default defineConfig([
       'unicorn/numeric-separators-style': [0],
       'unicorn/prefer-add-event-listener': [2],
       'unicorn/prefer-array-find': [2],
-      'unicorn/prefer-array-flat-map': [2],
       'unicorn/prefer-array-flat': [2],
+      'unicorn/prefer-array-flat-map': [2],
       'unicorn/prefer-array-index-of': [2],
       'unicorn/prefer-array-some': [2],
       'unicorn/prefer-at': [0],
@@ -849,6 +848,7 @@ export default defineConfig([
       'unicorn/prefer-query-selector': [2],
       'unicorn/prefer-reflect-apply': [0],
       'unicorn/prefer-regexp-test': [2],
+      'unicorn/prefer-response-static-json': [2],
       'unicorn/prefer-set-has': [0],
       'unicorn/prefer-set-size': [2],
       'unicorn/prefer-spread': [0],
@@ -900,7 +900,6 @@ export default defineConfig([
       'yoda': [2, 'never'],
     },
   },
-  // @ts-expect-error
   {
     ...playwright.configs['flat/recommended'],
     files: ['tests/e2e/**'],
@@ -916,7 +915,6 @@ export default defineConfig([
       },
     },
     extends: [
-      // @ts-expect-error
       vue.configs['flat/recommended'],
       // @ts-expect-error
       vueScopedCss.configs['flat/recommended'],
@@ -926,6 +924,7 @@ export default defineConfig([
       'vue/html-closing-bracket-spacing': [2, {startTag: 'never', endTag: 'never', selfClosingTag: 'never'}],
       'vue/max-attributes-per-line': [0],
       'vue/singleline-html-element-content-newline': [0],
+      'vue/require-typed-ref': [2],
     },
   },
   {
@@ -936,7 +935,6 @@ export default defineConfig([
   },
   {
     files: ['**/*.test.ts', 'web_src/js/test/setup.ts'],
-    // @ts-expect-error - https://github.com/vitest-dev/eslint-plugin-vitest/issues/737
     plugins: {vitest},
     languageOptions: {globals: globals.vitest},
     rules: {
