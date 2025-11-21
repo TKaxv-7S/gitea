@@ -67,8 +67,8 @@ jobs:
         id: meta
         with:
           images: |-
-            gitea/gitea
-            ghcr.io/go-gitea/gitea
+            ${{ secrets.DOCKERHUB_USERNAME }}/gitea
+            ghcr.io/${{ github.repository_owner }}/gitea
           tags: |
             type=raw,value=${{ steps.clean_name.outputs.branch }}
           annotations: |
