@@ -10,7 +10,7 @@ concurrency:
 
 jobs:
   nightly-binary:
-    runs-on: namespace-profile-gitea-release-binary
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
       # fetch all commits instead of only the last as some branches are long lived and could have many between versions
@@ -48,7 +48,7 @@ jobs:
           echo "Cleaned name is ${REF_NAME}"
           echo "branch=${REF_NAME}-nightly" >> "$GITHUB_OUTPUT"
   nightly-container:
-    runs-on: namespace-profile-gitea-release-docker
+    runs-on: ubuntu-latest
     permissions:
       packages: write # to publish to ghcr.io
     steps:
