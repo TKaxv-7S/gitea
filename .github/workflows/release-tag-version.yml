@@ -15,9 +15,10 @@ jobs:
   binary:
     runs-on: ubuntu-latest
     permissions:
+      contents: read
       packages: write # to publish to ghcr.io
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       # fetch all commits instead of only the last as some branches are long lived and could have many between versions
       # fetch all tags to ensure that "git describe" reports expected Gitea version, eg. v1.21.0-dev-1-g1234567
       - run: git fetch --unshallow --quiet --tags --force
@@ -26,9 +27,11 @@ jobs:
           go-version-file: go.mod
           check-latest: true
       - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v6
         with:
           node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
       - run: make deps-frontend deps-backend
       # xgo build
       - run: make release
@@ -53,7 +56,7 @@ jobs:
           echo "Cleaned name is ${REF_NAME}"
           echo "branch=${REF_NAME}" >> "$GITHUB_OUTPUT"
       - name: Install GH CLI
-        uses: dev-hanz-ops/install-gh-cli-action@v0.1.0
+        uses: dev-hanz-ops/install-gh-cli-action@v0.2.1
         with:
           gh-cli-version: 2.39.1
       - name: create github release
@@ -61,12 +64,14 @@ jobs:
           gh release create ${{ github.ref_name }} --title ${{ github.ref_name }} --notes-from-tag dist/release/*
         env:
           GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+
   container:
     runs-on: ubuntu-latest
     permissions:
+      contents: read
       packages: write # to publish to ghcr.io
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       # fetch all commits instead of only the last as some branches are long lived and could have many between versions
       # fetch all tags to ensure that "git describe" reports expected Gitea version, eg. v1.21.0-dev-1-g1234567
       - run: git fetch --unshallow --quiet --tags --force
@@ -121,7 +126,7 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: build regular container image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           platforms: linux/amd64,linux/arm64,linux/riscv64
@@ -129,7 +134,7 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           annotations: ${{ steps.meta.outputs.annotations }}
       - name: build rootless container image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           platforms: linux/amd64,linux/arm64,linux/riscv64

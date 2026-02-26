@@ -16,7 +16,7 @@ import {initMarkupAnchors} from './markup/anchors.ts';
 import {initNotificationCount} from './features/notification.ts';
 import {initRepoIssueContentHistory} from './features/repo-issue-content.ts';
 import {initStopwatch} from './features/stopwatch.ts';
-import {initFindFileInRepo} from './features/repo-findfile.ts';
+import {initRepoFileSearch} from './features/repo-findfile.ts';
 import {initMarkupContent} from './markup/content.ts';
 import {initRepoFileView} from './features/file-view.ts';
 import {initUserAuthOauth2, initUserCheckAppUrl} from './features/user-auth.ts';
@@ -32,7 +32,7 @@ import {initRepoMigrationStatusChecker} from './features/repo-migrate.ts';
 import {initRepoDiffView} from './features/repo-diff.ts';
 import {initOrgTeam} from './features/org-team.ts';
 import {initUserAuthWebAuthn, initUserAuthWebAuthnRegister} from './features/user-auth-webauthn.ts';
-import {initRepoRelease, initRepoReleaseNew} from './features/repo-release.ts';
+import {initRepoReleaseNew} from './features/repo-release.ts';
 import {initRepoEditor} from './features/repo-editor.ts';
 import {initCompSearchUserBox} from './features/comp/SearchUserBox.ts';
 import {initInstall} from './features/install.ts';
@@ -64,6 +64,7 @@ import {initGlobalButtonClickOnEnter, initGlobalButtons, initGlobalDeleteButton}
 import {initGlobalComboMarkdownEditor, initGlobalEnterQuickSubmit, initGlobalFormDirtyLeaveConfirm} from './features/common-form.ts';
 import {callInitFunctions} from './modules/init.ts';
 import {initRepoViewFileTree} from './features/repo-view-file-tree.ts';
+import {initGlobalShortcut} from './modules/shortcut.ts';
 
 const initStartTime = performance.now();
 const initPerformanceTracer = callInitFunctions([
@@ -83,6 +84,7 @@ const initPerformanceTracer = callInitFunctions([
   initGlobalComboMarkdownEditor,
   initGlobalDeleteButton,
   initGlobalInput,
+  initGlobalShortcut,
 
   initCommonOrganization,
   initCommonIssueListQuickGoto,
@@ -101,7 +103,7 @@ const initPerformanceTracer = callInitFunctions([
   initSshKeyFormParser,
   initStopwatch,
   initTableSort,
-  initFindFileInRepo,
+  initRepoFileSearch,
   initCopyContent,
 
   initAdminCommon,
@@ -133,7 +135,6 @@ const initPerformanceTracer = callInitFunctions([
   initRepoProject,
   initRepoPullRequestAllowMaintainerEdit,
   initRepoPullRequestReview,
-  initRepoRelease,
   initRepoReleaseNew,
   initRepoTopicBar,
   initRepoViewFileTree,

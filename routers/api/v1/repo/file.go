@@ -273,13 +273,19 @@ func GetArchive(ctx *context.APIContext) {
 	//   description: the git reference for download with attached archive format (e.g. master.zip)
 	//   type: string
 	//   required: true
+	// - name: path
+	//   in: query
+	//   type: array
+	//   items:
+	//     type: string
+	//   description: subpath of the repository to download
+	//   collectionFormat: multi
 	// responses:
 	//   200:
 	//     description: success
 	//   "404":
 	//     "$ref": "#/responses/notFound"
-
-	serveRepoArchive(ctx, ctx.PathParam("*"))
+	serveRepoArchive(ctx, ctx.PathParam("*"), ctx.FormStrings("path"))
 }
 
 // GetEditorconfig get editor config of a repository
@@ -608,10 +614,6 @@ func handleChangeRepoFilesError(ctx *context.APIContext, err error) {
 		files_service.IsErrFilePathInvalid(err) || files_service.IsErrRepoFileAlreadyExists(err) ||
 		files_service.IsErrCommitIDDoesNotMatch(err) || files_service.IsErrSHAOrCommitIDNotProvided(err) {
 		ctx.APIError(http.StatusUnprocessableEntity, err)
-		return
-	}
-	if git.IsErrBranchNotExist(err) || files_service.IsErrRepoFileDoesNotExist(err) || git.IsErrNotExist(err) {
-		ctx.APIError(http.StatusNotFound, err)
 		return
 	}
 	if errors.Is(err, util.ErrNotExist) {

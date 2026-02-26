@@ -179,11 +179,11 @@ func AuthorizeOAuth(ctx *context.Context) {
 	errs := binding.Errors{}
 	errs = form.Validate(ctx.Req, errs)
 	if len(errs) > 0 {
-		errstring := ""
+		var errstring strings.Builder
 		for _, e := range errs {
-			errstring += e.Error() + "\n"
+			errstring.WriteString(e.Error() + "\n")
 		}
-		ctx.ServerError("AuthorizeOAuth: Validate: ", fmt.Errorf("errors occurred during validation: %s", errstring))
+		ctx.ServerError("AuthorizeOAuth: Validate: ", fmt.Errorf("errors occurred during validation: %s", errstring.String()))
 		return
 	}
 
@@ -230,8 +230,7 @@ func AuthorizeOAuth(ctx *context.Context) {
 
 	// pkce support
 	switch form.CodeChallengeMethod {
-	case "S256":
-	case "plain":
+	case "S256", "plain":
 		if err := ctx.Session.Set("CodeChallengeMethod", form.CodeChallengeMethod); err != nil {
 			handleAuthorizeError(ctx, AuthorizeError{
 				ErrorCode:        ErrorCodeServerError,
